@@ -373,6 +373,7 @@ const App = () => {
 
     const handleOrderConfirmation = async () => {
         const { subtotal, finalTotal, discountRate } = calculateTotal();
+        const chatId = window.Telegram.WebApp.initDataUnsafe.user.id;
 
         // Create a cleaned products array with only purchased items
         const purchasedProducts = products
@@ -386,6 +387,7 @@ const App = () => {
 
         // Prepare order details object
         const orderDetails = {
+            chatId,
             delivery: orderData.delivery,
             paymentMethod: orderData.paymentMethod,
             products: purchasedProducts,
@@ -396,59 +398,54 @@ const App = () => {
         };
 
         try {
-            // Send the order details to the backend for local saving
-            const response = await fetch(`${serverUrl}/save-order`, {
+            // Send the order details to the backend to save
+            const saveResponse = await fetch(`${serverUrl}/save-order`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(orderDetails),
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('Order saved successfully:', data);
-                // Optional: Show confirmation message to the user
-                alert('Order saved successfully!');
-            })
-            .catch(error => {
-                console.error('Error saving order:', error);
-                // Handle any errors here, e.g., show an error message to the user
-                alert('Error saving order. Please try again later.');
             });
 
-            if (response.ok) {
-                // If the order is saved successfully, send data to Telegram WebApp
-                const orderData = await response.json(); // Assuming the server responds with order data
-                console.log("Order saved successfully:", orderData);
+            if (saveResponse.ok) {
+                console.log("Order saved successfully");
 
-                // Send order data to Telegram WebApp
-                window.Telegram.WebApp.sendData(JSON.stringify({
-                    message: "Order saved successfully",
-                    orderDetails: orderData
-                }));
+                // Once saved, send the order details to the bot through the webhook
+                const webhookResponse = await fetch(`${serverUrl}/webhook`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(orderDetails),
+                });
+
+                if (webhookResponse.ok) {
+                    console.log("Order sent to bot successfully");
+                    alert('Order confirmed and sent to bot!');
+                } else {
+                    console.error("Failed to send order to bot:", await webhookResponse.text());
+                    alert('Error sending order to bot. Please try again later.');
+                }
             } else {
-                console.error("Failed to save order:", await response.text());
+                console.error("Failed to save order:", await saveResponse.text());
+                alert('Error saving order. Please try again later.');
             }
         } catch (error) {
-            console.error("Error sending order to server:", error);
+            console.error("Error processing order:", error);
+            alert('An error occurred. Please try again later.');
         }
 
-        // Send data back to the bot and close WebApp if Telegram WebApp is available
+        // Finally, close the WebApp if Telegram WebApp is available
         if (window.Telegram?.WebApp) {
             try {
-                const orderString = JSON.stringify(orderDetails);
-                console.log('Sending order details:', orderString);
-                window.Telegram.WebApp.sendData(orderString);
+                console.log('Closing Telegram WebApp');
                 setTimeout(() => window.Telegram.WebApp.close(), 100);
             } catch (error) {
-                console.error('Error sending order:', error);
-                alert('Помилка при відправці замовлення. Будь ласка, спробуйте ще раз.');
+                console.error('Error closing Telegram WebApp:', error);
+                alert('An error occurred when closing the WebApp.');
             }
         } else {
             console.error('Telegram WebApp is not available');
-            alert('Будь ласка, відкрийте додаток через Telegram.');
+            alert('Please open the app through Telegram.');
         }
     };
+
 
     return (
         <div className="min-h-screen bg-gray-100">
