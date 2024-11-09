@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { LineChart, CartesianGrid, XAxis, YAxis, Tooltip, Line } from 'recharts'
 
+const serverUrl = 'https://251c-92-118-77-161.ngrok-free.app';
+
 // Sample data structure for products
 const initialProducts = [
     {
@@ -369,8 +371,8 @@ const App = () => {
         setCurrentPage('confirmation')
     }
 
-    const handleOrderConfirmation = () => {
-        const { subtotal, finalTotal, discountRate } = calculateTotal()
+    const handleOrderConfirmation = async () => {
+        const { subtotal, finalTotal, discountRate } = calculateTotal();
 
         // Create a cleaned products array with only purchased items
         const purchasedProducts = products
@@ -380,7 +382,7 @@ const App = () => {
                 name,
                 price,
                 quantity,
-            }))
+            }));
 
         // Prepare order details object
         const orderDetails = {
@@ -391,33 +393,51 @@ const App = () => {
             finalTotal,
             discountRate: discountRate * 100,
             orderDate: new Date().toISOString(),
+        };
+
+        try {
+            // Send the order details to the backend for local saving
+            const response = await fetch(`${serverUrl}/save-order`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(orderDetails),
+            });
+
+            if (response.ok) {
+                // If the order is saved successfully, send data to Telegram WebApp
+                const orderData = await response.json(); // Assuming the server responds with order data
+                console.log("Order saved successfully:", orderData);
+
+                // Send order data to Telegram WebApp
+                window.Telegram.WebApp.sendData(JSON.stringify({
+                    message: "Order saved successfully",
+                    orderDetails: orderData
+                }));
+            } else {
+                console.error("Failed to save order:", await response.text());
+            }
+        } catch (error) {
+            console.error("Error sending order to server:", error);
         }
 
-        // Verify Telegram WebApp is available
+        // Send data back to the bot and close WebApp if Telegram WebApp is available
         if (window.Telegram?.WebApp) {
             try {
-                // Convert order details to string and send
-                const orderString = JSON.stringify(orderDetails)
-                console.log('Sending order details:', orderString)
-
-                // Send data back to the bot
-                window.Telegram.WebApp.sendData(orderString)
-
-                // Close the WebApp
-                setTimeout(() => {
-                    window.Telegram.WebApp.close()
-                }, 100)
+                const orderString = JSON.stringify(orderDetails);
+                console.log('Sending order details:', orderString);
+                window.Telegram.WebApp.sendData(orderString);
+                setTimeout(() => window.Telegram.WebApp.close(), 100);
             } catch (error) {
-                console.error('Error sending order:', error)
-                alert(
-                    'Помилка при відправці замовлення. Будь ласка, спробуйте ще раз.',
-                )
+                console.error('Error sending order:', error);
+                alert('Помилка при відправці замовлення. Будь ласка, спробуйте ще раз.');
             }
         } else {
-            console.error('Telegram WebApp is not available')
-            alert('Будь ласка, відкрийте додаток через Telegram.')
+            console.error('Telegram WebApp is not available');
+            alert('Будь ласка, відкрийте додаток через Telegram.');
         }
-    }
+    };
 
     return (
         <div className="min-h-screen bg-gray-100">
