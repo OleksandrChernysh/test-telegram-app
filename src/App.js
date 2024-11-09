@@ -403,6 +403,17 @@ const App = () => {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(orderDetails),
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Order saved successfully:', data);
+                // Optional: Show confirmation message to the user
+                alert('Order saved successfully!');
+            })
+            .catch(error => {
+                console.error('Error saving order:', error);
+                // Handle any errors here, e.g., show an error message to the user
+                alert('Error saving order. Please try again later.');
             });
 
             if (response.ok) {
